@@ -1,0 +1,126 @@
+Intrusion​ ​Prevention​ ​System
+Team Generic: Thomas Lai 109872221, Bryan Liao 109766726
+Introduction
+With the expanding technologies and businesses, websites have become a very popular approach
+to reaching a large audience. People may send data and post information through the web and
+promote their business in a cost-effective manner. Although it is a versatile platform for
+everyone, there are potential disadvantages and breach points. Attackers can attempt to
+brute-force authentication to takeover or perform other malicious actions.
+To prevent attacks on a website, it is essential to perform authentication and dissuade or
+punish unsuccessful authentication attempts. This could be in the form of timeouts, of ip logging
+and restrictions, or even asking the account owner to update their password. This is all included
+in an Intrusion Prevention system.
+What​ ​is​ ​an​ ​intrusion​ ​prevention​ ​system?
+Intrusion Prevention systems detect possible malicious or suspicious actions and perform
+actions to prevent further attempts of intrusion. They monitor sites, scanning web traffic, and
+report and malicious IP addresses that attempt to login. Fail2Ban is a popular example of an
+intrusion detection system.
+In a general sense, this system has two parts: detection, and prevention. On the detection
+side, these systems monitor web activity and attempt to identify patterns of malicious intent. This
+could be anything from multiple failed login attempts through a single IP, either trying multiple
+accounts or multiple failed passwords. These IPs are banned by manipulating the Operating
+System’s firewall to blacklist certain IP addresses once they are listed as “banned”. In the Linux
+OS, IP bans occur using the “iptables” utility. By appending and dropping rules to the iptables
+list, the IP of a suspicious user can be blocked, and requests ignored, effectively preventing
+interactions between that IP and the server.
+Design​ ​process
+How​ ​does​ ​Fail2ban​ ​work?
+Fail2ban can be attached to websites to monitor logs of common services. It acts like a
+filter to identify authentication failures, from login attempts. It modifies the iptables firewall
+rules in order to ban, but has more customizable options for banning. This allows various
+firewall modifications depending on user preferences. In detail, fail2ban creates a new input
+chain under iptables rules. Once a ban has expired after a certain time period, the iptables will
+drop the banned ip automatically.
+How​ ​do​ ​we​ ​want​ ​to​ ​ban​ ​things​ ​in​ ​our​ ​intrusion​ ​detection​ ​system?
+Design​ ​Implementation
+In order to parse content access logs, we had to look at several examples. Bryan set up
+joomla and wordpress websites to view access log formats while Thomas worked on the parsing
+algorithm for the default access log.
+We noticed that wordpress and joomla had different formats for displaying access
+formation. Similarly, they had different outputs for successful and unsuccessful log in. Joomla
+redirects you to their login page if there is a failure to login, prompting to try again. When
+logging in is successful, they redirect you back to the homepage, with the successful login
+credentials. Wordpress also redirected you back to the login page for failure to logging in,
+however when logging in was successful, it would bring you to the admin page. We used these
+differences to determine when there have been unsuccessful logins on a single IP and we would
+add them to an array and keep a counter. Once the counter exceeded a certain amount of failed
+login attempts, we would ban the sites by adding them to the iptables.
+Design​ ​of​ ​the​ ​intrusion​ ​system,​ ​the​ ​specifics:
+Using Node.js technology, we were able to monitor certain directories and detect if logs
+were being appended. We used the fs.watch() function to perform this due to its simplistic ability
+to listen to a directory or file, detect changes, the type of changes, and the filenames of where the
+changes were originated.
+After successfully detecting a log change, we used fs.readFile to parse the data. The latest
+index is recorded to prevent from parsing the whole file every time a change is detected, since
+appending is assumed to be the only change on the log files. In some cases we used readFileSync
+to ensure that the file’s contents were available as soon as it was read, useful for reading in
+config file changes.
+After parsing the data by the next line indicators, we broke up each line to check for
+several features. IP addresses, any sort of indication of whether the line was an authentication
+response, and html protocols were recorded and checked to determine if the log had information
+indicate that there was an authentication attempt.
+If the log was determined to be an authentication log, we checked the log through several
+scenarios. Scenario 1 is if the client attempted to authenticate, and was able to successfully
+authenticate. This is usually indicated by a GET response with a 200 protocol. If this was the
+case, then the client’s ip is removed from the ip watchlist if such a record exists.
+Scenario 2 is a bit larger, and broken into several parts. If an authentication log is
+detected, and the authentication log indicated that it was a failure, then the client’s ip should be
+placed in the watchlist.
+- If the watchlist did not hold a record of the client’s ip address, then a record is inserted
+into an empty spot in the array, with the client’s ip and a count of 1
+- If the watchlist did not hold a record of the client’s ip address, and there is not empty
+space on the watchlist array to insert a record, then a record of the client’s ip and count of
+1 is created and pushed onto the array.
+- If the watchlist does hold a record of the client’s ip address, then the count for that record
+is incremented.
+- If that record’s count is greater than the max_count specified than the client’s ip is
+banned and removed from the watchlist.
+The way the client’s ips are banned is with a child process that executes a command line code.
+This code that the child process runs will append a rule to the iptables rule chain that blocks
+requests from that ip. In addition to that append, the child process will also run an at command
+that will execute a job x minutes from when the command was executed. This job will drop the
+rule that bans that ip, and the minutes are specified by the timeout variable in the config file.
+Scenario 3 is if the change to the log file was not an authentication attempt, and was
+therefore ignored or not acted upon by the program. Thomas worked on the logic and most of the
+coding for the scenarios, and Bryan assisted in testing, and determining the parsing formulas.
+Web​ ​Interface
+We decided to use Express.js to allow users to interface with our program. The decision
+to use this technology was due to its synergy with Node.js. The express templates and examples
+helped us setup the reverse proxy and the server. The downside to this technology is that the
+generation of the proxy is not automated, and thus something that the user must configure,
+although it does allow for a more versatile program, as the user may select which website is
+allowed to manage the program. Bryan worked on the user interface and the depiction of the
+iptables, while Thomas worked on the connection to the program, and parts of the
+documentation.
+Tracking​ ​SSH​ ​attempts
+Authentication attempts were logged differently than the website’s. We also gave the user
+the option of whether they wanted the ssh attempts to be prevented or not. Due to this, we
+performed the detection separately, and handled the log changes separately. In addition this, the
+log files for the server were in a separate directory, and could not be watched with the websites.
+Requirement​ ​List​:
+Nodejs - the program was written in Nodejs
+NPM - Node Package Manager
+Apache2 - all the website log files should be under /var/log/apache2
+(LAMP) - for the websites
+Express.js - For web interface
+Installation​ ​Instructions​:
+Follow the Express.js installation instructions at:
+http://expressjs.com/en/starter/installing.html
+http://expressjs.com/en/starter/generator.html
+- Replace app.js with the desired app.js
+- Edit myapp/bin/www to listen to the desired port (if not already set during installation)
+- Enable the following code block below in the configs of the websites you wish to manage
+the program on.
+- Edit the superjs.conf file to specify the desired values for variables or specify it on the
+web interface.
+How​ ​to​ ​Use
+- Go to the myapp directory enter in sudo npm start
+Known​ ​Issues:
+- After program closes the process may not be killed correct, if it occurs use ‘sudo fuser -k
+(port)/tcp
+(port) should be the port number the program will run on.
+- When joomla (if being watched) is refreshed on its admin login page it is counted as a
+bannable offense
+- If the client goes to the wordpress main page (if being watched), they are wiped from the
+watchlist
+- Web interface was not fully implemented
